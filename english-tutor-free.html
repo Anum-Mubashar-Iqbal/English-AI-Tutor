@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VoiceTutor — Free English AI Tutor</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --ink: #1a1310; --paper: #faf7f2; --warm: #f5efe6;
+    --copper: #c8773a; --copper-light: #e8a96a; --copper-dark: #a05c25;
+    --sage: #6b8f6e; --muted: #8a7e74; --border: #e0d8ce;
+    --shadow: rgba(26,19,16,0.12); --error: #c0392b;
+    --listening-glow: rgba(200,119,58,0.35);
+  }
+  body { font-family:'DM Sans',sans-serif; background:var(--paper); color:var(--ink); min-height:100vh; display:flex; flex-direction:column; }
+
+  /* SETUP SCREEN */
+  #setupScreen {
+    position:fixed; inset:0; z-index:999;
+    background:var(--ink);
+    display:flex; align-items:center; justify-content:center;
+    padding:20px;
+  }
+  .setup-card {
+    background:var(--paper); border-radius:20px;
+    padding:40px 36px; max-width:520px; width:100%;
+    box-shadow:0 20px 60px rgba(0,0,0,0.5);
+    border:2px solid var(--copper);
+  }
+  .setup-card h1 {
+    font-family:'Playfair Display',serif;
+    font-size:1.8rem; color:var(--copper-dark);
+    margin-bottom:6px;
+  }
+  .setup-card .tagline { color:var(--muted); font-size:0.9rem; margin-bottom:28px; }
+  .steps { margin-bottom:28px; }
+  .step {
+    display:flex; gap:14px; align-items:flex-start;
+    padding:14px; border-radius:10px;
+    border:1px solid var(--border); margin-bottom:10px;
+    background:white;
+  }
+  .step-num {
+    width:28px; height:28px; border-radius:50%;
+    background:var(--copper); color:white;
+    font-weight:700; font-size:0.85rem;
+    display:flex; align-items:center; justify-content:center;
+    flex-shrink:0;
+  }
+  .step-content { flex:1; }
+  .step-content strong { display:block; font-size:0.92rem; margin-bottom:3px; }
+  .step-content span { font-size:0.82rem; color:var(--muted); line-height:1.5; }
+  .step-content a { color:var(--copper); font-weight:600; }
+  .api-input-wrap { position:relative; margin-bottom:10px; }
+  .api-input {
+    width:100%; padding:14px 16px;
+    border:2px solid var(--border); border-radius:10px;
+    font-family:'DM Sans',sans-serif; font-size:0.95rem;
+    color:var(--ink); background:var(--warm); outline:none;
+    transition:border-color 0.2s;
+  }
+  .api-input:focus { border-color:var(--copper); background:white; }
+  .api-input::placeholder { color:var(--muted); }
+  .btn-start {
+    width:100%; padding:15px;
+    background:var(--copper); color:white; border:none;
+    border-radius:10px; font-family:'DM Sans',sans-serif;
+    font-size:1rem; font-weight:600; cursor:pointer;
+    transition:all 0.2s; letter-spacing:0.3px;
+  }
+  .btn-start:hover { background:var(--copper-dark); transform:translateY(-1px); }
+  .free-badge {
+    text-align:center; margin-top:14px;
+    font-size:0.8rem; color:var(--sage); font-weight:500;
+  }
+  .free-badge span { background:#e8f5e9; padding:3px 10px; border-radius:20px; border:1px solid #c8e6c9; }
+
+  /* MAIN APP */
+  header {
+    background:var(--ink); color:var(--paper);
+    padding:16px 28px; display:flex;
+    align-items:center; justify-content:space-between;
+    border-bottom:3px solid var(--copper);
+    position:sticky; top:0; z-index:100;
+  }
+  .logo { font-family:'Playfair Display',serif; font-size:1.4rem; }
+  .logo span { color:var(--copper-light); font-style:italic; }
+  .header-right { display:flex; gap:10px; align-items:center; }
+  .status-pill {
+    display:flex; align-items:center; gap:7px;
+    background:rgba(255,255,255,0.08); padding:6px 14px;
+    border-radius:20px; font-size:0.8rem; color:#c8b9a8;
+  }
+  .status-dot { width:7px; height:7px; border-radius:50%; background:var(--sage); animation:pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  .btn-logout {
+    background:transparent; border:1px solid rgba(255,255,255,0.2);
+    color:#c8b9a8; padding:6px 12px; border-radius:8px;
+    cursor:pointer; font-size:0.78rem; transition:all 0.2s;
+  }
+  .btn-logout:hover { border-color:var(--error); color:#ff8a80; }
+
+  .app { display:grid; grid-template-columns:260px 1fr; flex:1; min-height:0; }
+
+  aside {
+    background:var(--warm); border-right:1px solid var(--border);
+    padding:20px 16px; display:flex; flex-direction:column;
+    gap:20px; overflow-y:auto;
+  }
+  .sidebar-section h3 {
+    font-family:'Playfair Display',serif; font-size:0.8rem;
+    text-transform:uppercase; letter-spacing:1.5px;
+    color:var(--copper-dark); margin-bottom:10px;
+    padding-bottom:5px; border-bottom:1px solid var(--border);
+  }
+  .mode-btn {
+    width:100%; text-align:left; padding:9px 12px;
+    border:1px solid var(--border); border-radius:8px;
+    background:white; cursor:pointer;
+    font-family:'DM Sans',sans-serif; font-size:0.88rem;
+    color:var(--ink); margin-bottom:5px; transition:all 0.2s;
+    display:flex; align-items:center; gap:8px;
+  }
+  .mode-btn:hover { border-color:var(--copper); background:#fff8f0; }
+  .mode-btn.active { border-color:var(--copper); background:var(--copper); color:white; font-weight:500; }
+  .voice-control { margin-bottom:8px; }
+  .voice-control label { display:block; font-size:0.75rem; color:var(--muted); margin-bottom:3px; font-weight:500; text-transform:uppercase; letter-spacing:0.8px; }
+  .voice-control select, .voice-control input[type=range] {
+    width:100%; padding:6px 8px; border:1px solid var(--border);
+    border-radius:6px; background:white;
+    font-family:'DM Sans',sans-serif; font-size:0.82rem; color:var(--ink); outline:none;
+  }
+  .voice-control input[type=range] { padding:3px 0; accent-color:var(--copper); cursor:pointer; }
+  .tip { background:white; border:1px solid var(--border); border-left:3px solid var(--copper); border-radius:8px; padding:10px; font-size:0.8rem; color:var(--muted); line-height:1.6; margin-bottom:6px; }
+  .tip strong { color:var(--ink); display:block; margin-bottom:3px; }
+
+  main { display:flex; flex-direction:column; overflow:hidden; }
+  .chat-messages { flex:1; overflow-y:auto; padding:24px 32px; display:flex; flex-direction:column; gap:18px; scroll-behavior:smooth; }
+  .welcome-card {
+    background:linear-gradient(135deg,var(--ink) 0%,#3d2c1e 100%);
+    border-radius:14px; padding:28px; color:var(--paper);
+    text-align:center; border:1px solid var(--copper-dark);
+  }
+  .welcome-card h2 { font-family:'Playfair Display',serif; font-size:1.4rem; margin-bottom:6px; color:var(--copper-light); }
+  .welcome-card p { font-size:0.87rem; color:#c8b9a8; line-height:1.7; }
+  .free-note { display:inline-block; margin-top:10px; background:rgba(107,143,110,0.25); color:#9dc9a0; font-size:0.78rem; padding:4px 12px; border-radius:20px; border:1px solid rgba(107,143,110,0.4); }
+
+  .message { display:flex; gap:10px; max-width:80%; animation:slideIn 0.3s ease; }
+  @keyframes slideIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+  .message.user { align-self:flex-end; flex-direction:row-reverse; }
+  .message.ai   { align-self:flex-start; }
+  .avatar { width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.95rem; flex-shrink:0; margin-top:4px; }
+  .message.user .avatar { background:var(--copper); color:white; }
+  .message.ai   .avatar { background:var(--sage); color:white; }
+  .bubble { padding:11px 16px; border-radius:14px; font-size:0.9rem; line-height:1.7; box-shadow:0 2px 8px var(--shadow); }
+  .message.user .bubble { background:var(--ink); color:var(--paper); border-bottom-right-radius:4px; }
+  .message.ai   .bubble { background:white; border:1px solid var(--border); border-bottom-left-radius:4px; color:var(--ink); }
+  .feedback-tag { display:inline-block; background:#f0f5f0; border:1px solid #c8e0c8; color:var(--sage); font-size:0.74rem; padding:2px 8px; border-radius:20px; margin-top:6px; font-weight:500; }
+
+  .typing-indicator { display:flex; gap:5px; align-items:center; padding:12px 16px; background:white; border:1px solid var(--border); border-radius:14px; border-bottom-left-radius:4px; width:fit-content; box-shadow:0 2px 8px var(--shadow); }
+  .typing-dot { width:7px; height:7px; border-radius:50%; background:var(--muted); animation:bounce 1.2s infinite; }
+  .typing-dot:nth-child(2) { animation-delay:.2s; }
+  .typing-dot:nth-child(3) { animation-delay:.4s; }
+  @keyframes bounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-6px)} }
+
+  .controls { background:white; border-top:1px solid var(--border); padding:14px 32px; display:flex; flex-direction:column; gap:10px; }
+  .transcript-box { background:var(--warm); border:1px dashed var(--border); border-radius:8px; padding:8px 14px; font-size:0.86rem; color:var(--muted); min-height:36px; font-style:italic; transition:all 0.3s; }
+  .transcript-box.listening { border-color:var(--copper); border-style:solid; color:var(--ink); background:#fff8f0; box-shadow:0 0 0 3px var(--listening-glow); }
+  .controls-row { display:flex; gap:8px; align-items:center; }
+  .text-input { flex:1; padding:11px 14px; border:1px solid var(--border); border-radius:8px; font-family:'DM Sans',sans-serif; font-size:0.9rem; color:var(--ink); background:var(--warm); outline:none; transition:all 0.2s; }
+  .text-input:focus { border-color:var(--copper); box-shadow:0 0 0 3px var(--listening-glow); background:white; }
+  .btn { border:none; cursor:pointer; border-radius:8px; font-family:'DM Sans',sans-serif; font-weight:500; transition:all 0.2s; display:flex; align-items:center; gap:5px; }
+  .btn-send { padding:11px 20px; background:var(--ink); color:white; font-size:0.88rem; }
+  .btn-send:hover { background:#2d1f15; }
+  .btn-mic { width:48px; height:48px; border-radius:50%; background:var(--copper); color:white; font-size:1.2rem; flex-shrink:0; box-shadow:0 4px 14px rgba(200,119,58,0.4); justify-content:center; }
+  .btn-mic:hover { background:var(--copper-dark); transform:scale(1.05); }
+  .btn-mic.active { background:var(--error); animation:micPulse 1s infinite; }
+  @keyframes micPulse { 0%{box-shadow:0 0 0 0 rgba(192,57,43,.5)} 70%{box-shadow:0 0 0 10px rgba(192,57,43,0)} 100%{box-shadow:0 0 0 0 rgba(192,57,43,0)} }
+  .btn-speak { padding:11px 14px; background:var(--sage); color:white; font-size:0.88rem; }
+  .btn-speak:hover { background:#5a7a5d; }
+  .btn-speak:disabled { opacity:.4; cursor:not-allowed; }
+  .btn-clear { padding:11px 12px; background:transparent; color:var(--muted); border:1px solid var(--border); font-size:0.82rem; }
+  .btn-clear:hover { border-color:var(--error); color:var(--error); }
+
+  .toast { position:fixed; bottom:18px; right:18px; background:var(--error); color:white; padding:11px 16px; border-radius:10px; font-size:0.85rem; box-shadow:0 4px 16px rgba(0,0,0,.2); opacity:0; pointer-events:none; transition:opacity .3s; z-index:300; }
+  .toast.show { opacity:1; }
+
+  @media(max-width:680px) { .app{grid-template-columns:1fr} aside{display:none} .chat-messages,.controls{padding:14px 16px} .message{max-width:96%} }
+</style>
+</head>
+<body>
+
+<!-- ═══════ SETUP SCREEN ═══════ -->
+<div id="setupScreen">
+  <div class="setup-card">
+    <h1>🎙️ VoiceTutor</h1>
+    <p class="tagline">Free AI English Tutor — Voice Communication Powered by Groq</p>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <strong>Go to console.groq.com</strong>
+          <span>Click <b>Sign Up</b> → enter your email → verify → done.<br>
+          <a href="https://console.groq.com" target="_blank">👉 console.groq.com</a> — takes 1 minute</span>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <strong>Create a free API Key</strong>
+          <span>In Groq dashboard → click <b>"API Keys"</b> on left → <b>"Create API Key"</b> → copy it.<br>
+          Looks like: <code style="background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:0.8em">gsk_xxxxxxxxxxxx</code></span>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <strong>Paste it below and start!</strong>
+          <span>Your key stays in your browser only. Never sent anywhere except Groq.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="api-input-wrap">
+      <input class="api-input" id="apiKeyInput" type="password"
+        placeholder="Paste your Groq API Key here  (gsk_...)"
+        onkeydown="if(event.key==='Enter') startApp()">
+    </div>
+    <button class="btn-start" onclick="startApp()">Start Tutoring →</button>
+    <div class="free-badge"><span>✅ 100% Free — No credit card — No payment — Ever</span></div>
+  </div>
+</div>
+
+<!-- ═══════ MAIN APP ═══════ -->
+<div id="mainApp" style="display:none; flex-direction:column; flex:1;">
+
+  <header>
+    <div class="logo">Voice<span>Tutor</span> <small style="font-size:0.6rem;background:rgba(107,143,110,0.3);color:#9dc9a0;padding:2px 8px;border-radius:10px;margin-left:6px;font-family:'DM Sans',sans-serif;">FREE</small></div>
+    <div class="header-right">
+      <div class="status-pill"><div class="status-dot"></div><span id="statusText">Ready</span></div>
+      <button class="btn-logout" onclick="logout()">Change Key</button>
+    </div>
+  </header>
+
+  <div class="app">
+    <aside>
+      <div class="sidebar-section">
+        <h3>Tutor Mode</h3>
+        <button class="mode-btn active" onclick="setMode('conversation')" id="mode-conversation">💬 Free Conversation</button>
+        <button class="mode-btn" onclick="setMode('grammar')" id="mode-grammar">📝 Grammar Check</button>
+        <button class="mode-btn" onclick="setMode('pronunciation')" id="mode-pronunciation">🎙️ Pronunciation</button>
+        <button class="mode-btn" onclick="setMode('vocabulary')" id="mode-vocabulary">📚 Vocabulary Builder</button>
+        <button class="mode-btn" onclick="setMode('ielts')" id="mode-ielts">🎯 IELTS Practice</button>
+      </div>
+      <div class="sidebar-section">
+        <h3>AI Voice</h3>
+        <div class="voice-control">
+          <label>Voice</label>
+          <select id="voiceSelect"><option>Loading…</option></select>
+        </div>
+        <div class="voice-control">
+          <label>Speed <span id="rateVal">1.0</span>x</label>
+          <input type="range" id="rateRange" min="0.6" max="1.6" step="0.1" value="1.0" oninput="document.getElementById('rateVal').textContent=this.value">
+        </div>
+        <div class="voice-control">
+          <label>Pitch <span id="pitchVal">1.0</span></label>
+          <input type="range" id="pitchRange" min="0.7" max="1.4" step="0.1" value="1.0" oninput="document.getElementById('pitchVal').textContent=this.value">
+        </div>
+      </div>
+      <div class="sidebar-section">
+        <h3>How to Use</h3>
+        <div class="tip"><strong>🎤 Speak</strong>Click the orange mic → speak → it auto-sends.</div>
+        <div class="tip"><strong>🔊 Listen</strong>AI replies are read aloud automatically.</div>
+        <div class="tip"><strong>⌨️ Type</strong>You can type and press Enter too.</div>
+        <div class="tip"><strong>🌐 Browser</strong>Use Google Chrome for best voice support.</div>
+      </div>
+    </aside>
+
+    <main>
+      <div class="chat-messages" id="chatMessages">
+        <div class="welcome-card">
+          <h2>Hello! I'm your English Tutor 👋</h2>
+          <p>Choose a mode from the left, then speak or type.<br>I'll correct your grammar, build your vocabulary,<br>and practice spoken English with you!</p>
+          <div class="free-note">⚡ Powered by Groq — Completely Free</div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div class="transcript-box" id="transcriptBox">🎙️ Press the mic to start speaking…</div>
+        <div class="controls-row">
+          <button class="btn btn-mic" id="micBtn" onclick="toggleMic()">🎤</button>
+          <input class="text-input" id="textInput" type="text" placeholder="Or type your message here…" onkeydown="if(event.key==='Enter') sendMessage()">
+          <button class="btn btn-send" onclick="sendMessage()">Send ↗</button>
+          <button class="btn btn-speak" id="speakBtn" onclick="speakLast()" disabled>🔊</button>
+          <button class="btn btn-clear" onclick="clearChat()">Clear</button>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── CONFIG ──────────────────────────────────────────
+const GROQ_API  = "https://api.groq.com/openai/v1/chat/completions";
+const GROQ_MODEL = "llama-3.3-70b-versatile"; // Best free model on Groq
+
+// ── MODE PROMPTS ────────────────────────────────────
+const modePrompts = {
+  conversation: `You are a warm, encouraging English conversation tutor. Have natural conversations. After each student message, respond naturally and gently add 1-2 grammar or vocabulary tips if needed — put them in [Feedback: ...] at the very end. Keep responses to 2-4 sentences. Be friendly and supportive.`,
+  grammar: `You are an English grammar tutor. When the student writes something, identify grammar mistakes, provide the corrected version, briefly explain the rule, and give one example sentence. If grammar is perfect, praise them and share a related grammar tip.`,
+  pronunciation: `You are an English pronunciation coach. Help students pronounce English correctly. For tricky words, use simple phonetic spelling like "GEN-er-ous" or "pro-NUN-see-AY-shun". Identify pronunciation patterns and give practical tips. Be encouraging.`,
+  vocabulary: `You are an English vocabulary tutor. Help students learn new words. Pick 1-2 interesting words from their message or teach a useful related word. Give: definition, pronunciation tip, example sentence, and a fun memory trick. Make it engaging!`,
+  ielts: `You are an IELTS Speaking examiner and coach. Ask IELTS Speaking Part 1, 2, or 3 questions. Evaluate responses on: Fluency & Coherence, Vocabulary, Grammar, Pronunciation. Give a band score estimate (1-9) for each. Be constructive and exam-focused.`
+};
+
+// ── INIT ────────────────────────────────────────────
+let apiKey = localStorage.getItem('groq_key') || '';
+let currentMode = 'conversation';
+let lastAIText = '';
+let isListening = false;
+let recognition = null;
+let synth = window.speechSynthesis;
+let voices = [];
+
+// Auto-login if key saved
+window.onload = () => {
+  if (apiKey) showApp();
+  loadVoices();
+};
+
+function startApp() {
+  const key = document.getElementById('apiKeyInput').value.trim();
+  if (!key || !key.startsWith('gsk_')) {
+    showToast('⚠️ Please paste a valid Groq key (starts with gsk_)');
+    return;
+  }
+  apiKey = key;
+  localStorage.setItem('groq_key', key);
+  showApp();
+}
+
+function showApp() {
+  document.getElementById('setupScreen').style.display = 'none';
+  document.getElementById('mainApp').style.display = 'flex';
+}
+
+function logout() {
+  localStorage.removeItem('groq_key');
+  apiKey = '';
+  document.getElementById('setupScreen').style.display = 'flex';
+  document.getElementById('mainApp').style.display = 'none';
+  document.getElementById('apiKeyInput').value = '';
+}
+
+// ── TTS ─────────────────────────────────────────────
+function loadVoices() {
+  voices = synth.getVoices().filter(v => v.lang.startsWith('en'));
+  const sel = document.getElementById('voiceSelect');
+  sel.innerHTML = '';
+  if (!voices.length) { sel.innerHTML = '<option>No voices found</option>'; return; }
+  voices.forEach((v, i) => {
+    const o = document.createElement('option');
+    o.value = i; o.textContent = `${v.name} (${v.lang})`;
+    if (v.name.includes('Female') || v.name.includes('Samantha')) o.selected = true;
+    sel.appendChild(o);
+  });
+}
+synth.onvoiceschanged = loadVoices;
+
+function speak(text) {
+  synth.cancel();
+  const clean = text.replace(/\[Feedback:.*?\]/gs,'').replace(/[*_#`]/g,'').trim();
+  if (!clean) return;
+  const u = new SpeechSynthesisUtterance(clean);
+  const sel = document.getElementById('voiceSelect');
+  if (voices[sel.value]) u.voice = voices[sel.value];
+  u.rate  = parseFloat(document.getElementById('rateRange').value);
+  u.pitch = parseFloat(document.getElementById('pitchRange').value);
+  u.lang  = 'en-US';
+  setStatus('Speaking…');
+  u.onend = () => setStatus('Ready');
+  synth.speak(u);
+}
+
+function speakLast() { if (lastAIText) speak(lastAIText); }
+
+// ── STT ─────────────────────────────────────────────
+function initRecognition() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { showToast('❌ Use Google Chrome for voice input!'); return null; }
+  const r = new SR();
+  r.lang = 'en-US'; r.interimResults = true; r.continuous = false;
+  r.onresult = e => {
+    const text = Array.from(e.results).map(r => r[0].transcript).join('');
+    const box = document.getElementById('transcriptBox');
+    box.textContent = text; box.classList.add('listening');
+    if (e.results[e.results.length-1].isFinal)
+      document.getElementById('textInput').value = text;
+  };
+  r.onerror = e => { showToast('Mic error: ' + e.error); stopListening(); };
+  r.onend = () => {
+    stopListening();
+    const val = document.getElementById('textInput').value.trim();
+    if (val) sendMessage();
+  };
+  return r;
+}
+
+function toggleMic() {
+  if (isListening) { stopListening(); return; }
+  synth.cancel();
+  recognition = initRecognition();
+  if (!recognition) return;
+  isListening = true;
+  recognition.start();
+  const btn = document.getElementById('micBtn');
+  btn.classList.add('active'); btn.textContent = '⏹';
+  document.getElementById('transcriptBox').textContent = '🔴 Listening — speak now…';
+  document.getElementById('transcriptBox').classList.add('listening');
+  setStatus('Listening…');
+}
+
+function stopListening() {
+  isListening = false;
+  if (recognition) { recognition.stop(); recognition = null; }
+  const btn = document.getElementById('micBtn');
+  btn.classList.remove('active'); btn.textContent = '🎤';
+  document.getElementById('transcriptBox').classList.remove('listening');
+  setStatus('Ready');
+}
+
+// ── CHAT ─────────────────────────────────────────────
+async function sendMessage() {
+  const input = document.getElementById('textInput');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  const box = document.getElementById('transcriptBox');
+  box.textContent = '🎙️ Press the mic to start speaking…';
+  box.classList.remove('listening');
+
+  appendMessage('user', text);
+  const tid = appendTyping();
+  setStatus('Tutor is thinking…');
+
+  try {
+    const reply = await callGroq(text);
+    removeTyping(tid);
+    appendMessage('ai', reply);
+    lastAIText = reply;
+    document.getElementById('speakBtn').disabled = false;
+    speak(reply);
+    setStatus('Ready');
+  } catch(err) {
+    removeTyping(tid);
+    appendMessage('ai', '⚠️ Error: ' + err.message + '. Please check your API key.');
+    showToast('Error: ' + err.message);
+    setStatus('Error');
+  }
+}
+
+async function callGroq(userMsg) {
+  const res = await fetch(GROQ_API, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + apiKey
+    },
+    body: JSON.stringify({
+      model: GROQ_MODEL,
+      max_tokens: 400,
+      messages: [
+        { role: 'system', content: modePrompts[currentMode] },
+        { role: 'user',   content: userMsg }
+      ]
+    })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || 'HTTP ' + res.status);
+  }
+  const data = await res.json();
+  return data.choices?.[0]?.message?.content || 'No response received.';
+}
+
+// ── UI HELPERS ────────────────────────────────────────
+function appendMessage(role, text) {
+  const c = document.getElementById('chatMessages');
+  const div = document.createElement('div');
+  div.className = 'message ' + role;
+  const av = document.createElement('div');
+  av.className = 'avatar';
+  av.textContent = role === 'user' ? '👤' : '🧑‍🏫';
+  const bub = document.createElement('div');
+  bub.className = 'bubble';
+  if (role === 'ai') {
+    const fm = text.match(/\[Feedback:(.*?)\]/s);
+    const main = text.replace(/\[Feedback:.*?\]/s,'').trim();
+    bub.innerHTML = `<span>${escHTML(main)}</span>`;
+    if (fm) {
+      const tag = document.createElement('span');
+      tag.className = 'feedback-tag';
+      tag.textContent = '✏️ ' + fm[1].trim();
+      bub.appendChild(document.createElement('br'));
+      bub.appendChild(tag);
+    }
+  } else { bub.textContent = text; }
+  div.appendChild(av); div.appendChild(bub);
+  c.appendChild(div); c.scrollTop = c.scrollHeight;
+}
+
+function escHTML(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+let tc = 0;
+function appendTyping() {
+  const id = 'typ-' + (++tc);
+  const c = document.getElementById('chatMessages');
+  const d = document.createElement('div');
+  d.className = 'message ai'; d.id = id;
+  d.innerHTML = `<div class="avatar">🧑‍🏫</div><div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>`;
+  c.appendChild(d); c.scrollTop = c.scrollHeight;
+  return id;
+}
+function removeTyping(id) { document.getElementById(id)?.remove(); }
+
+function setMode(m) {
+  currentMode = m;
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('mode-' + m).classList.add('active');
+  const names = { conversation:'Free Conversation', grammar:'Grammar Check', pronunciation:'Pronunciation Practice', vocabulary:'Vocabulary Builder', ielts:'IELTS Practice' };
+  appendMessage('ai', `✅ Switched to ${names[m]} mode. Go ahead — speak or type!`);
+}
+
+function clearChat() {
+  document.getElementById('chatMessages').innerHTML = `<div class="welcome-card"><h2>Fresh Start 🌿</h2><p>Ready for a new session!<br>Choose a mode and start speaking or typing.</p><div class="free-note">⚡ Powered by Groq — Free</div></div>`;
+  lastAIText = ''; document.getElementById('speakBtn').disabled = true; synth.cancel();
+}
+
+function setStatus(t) { document.getElementById('statusText').textContent = t; }
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3500);
+}
+</script>
+</body>
+</html>
